@@ -1,10 +1,11 @@
-module lending_platform::loan_manager {
+module 0x0::loan_manager {  // or use your specific address
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
+    use sui::event;
     
     // Error codes
     const EInsufficientCollateral: u64 = 0;
@@ -19,14 +20,14 @@ module lending_platform::loan_manager {
     const MAX_MISSED_PAYMENTS: u64 = 3;
     const SECONDS_PER_MONTH: u64 = 2592000;
 
-    struct LendingPool has key {
+    public struct LendingPool has key {
         id: UID,
         usdc_balance: Balance<USDC>,
         total_interest_rate: u64,
         locked_until: u64,
     }
 
-    struct Loan has key {
+    public struct Loan has key {
         id: UID,
         borrower: address,
         main_asset_amount: u64,
@@ -38,17 +39,16 @@ module lending_platform::loan_manager {
         locked_asset: Balance<WBTC>,
     }
 
-    struct USDC has drop {}
-    struct WBTC has drop {}
+    public struct USDC has drop {}
+    public struct WBTC has drop {}
 
-    // Events
-    struct LoanCreated has copy, drop {
+    public struct LoanCreated has copy, drop {
         loan_id: ID,
         borrower: address,
         amount: u64,
     }
 
-    struct RepaymentMade has copy, drop {
+    public struct RepaymentMade has copy, drop {
         loan_id: ID,
         amount: u64,
         remaining_payments: u64,
@@ -117,37 +117,42 @@ module lending_platform::loan_manager {
 
     // Make loan repayment
     public fun make_repayment(
-        loan: &mut Loan,
-        payment: Coin<USDC>,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ) {
-        let payment_amount = coin::value(&payment);
-        assert!(payment_amount >= loan.monthly_payment, EInvalidRepaymentAmount);
-        
-        // Check if payment is on time
-        let current_time = clock::timestamp_ms(clock);
-        if (current_time - loan.last_payment_time > SECONDS_PER_MONTH) {
-            loan.missed_payments = loan.missed_payments + 1;
-        };
-        
-        // Check for default
-        assert!(loan.missed_payments < MAX_MISSED_PAYMENTS, ELoanDefaulted);
-        
-        // Process payment
-        loan.remaining_payments = loan.remaining_payments - 1;
-        loan.last_payment_time = current_time;
-        
-        // Release 10% of locked asset to borrower
-        // TODO: Implement asset release logic
-        
-        // Emit repayment event
-        event::emit(RepaymentMade {
-            loan_id: object::id(loan),
-            amount: payment_amount,
-            remaining_payments: loan.remaining_payments,
-        });
-    }
+    loan: &mut Loan,
+    payment: Coin<USDC>,
+    clock: &Clock,
+    ctx: &mut TxContext
+) {
+    let payment_amount = coin::value(&payment);
+    assert!(payment_amount >= loan.monthly_payment, EInvalidRepaymentAmount);
+    
+    // Check if payment is on time
+    let current_time = clock::timestamp_ms(clock);
+    if (current_time - loan.last_payment_time > SECONDS_PER_MONTH) {
+        loan.missed_payments = loan.missed_payments + 1;
+    };
+    
+    // Check for default
+    assert!(loan.missed_payments < MAX_MISSED_PAYMENTS, ELoanDefaulted);
+    
+    // Process payment
+    loan.remaining_payments = loan.remaining_payments - 1;
+    loan.last_payment_time = current_time;
+    
+    // Add payment to loan's collateral balance
+    let payment_balance = coin::into_balance(payment);
+    balance::join(&mut loan.collateral, payment_balance);
+    
+    // Release 10% of locked asset to borrower
+    // TODO: Implement asset release logic
+    
+    // Emit repayment event
+    event::emit(RepaymentMade {
+        loan_id: object::id(loan),
+        amount: payment_amount,
+        remaining_payments: loan.remaining_payments,
+    });
+}
+
 
     // Handle loan default
     public fun handle_default(
