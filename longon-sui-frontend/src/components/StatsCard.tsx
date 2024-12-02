@@ -1,4 +1,3 @@
-// Dashboard Stats Card Component
 interface StatsCardProps {
   title: string;
   value: string | number;
@@ -17,4 +16,4 @@ const StatsCard: React.FC<StatsCardProps> = ({ title, value, icon: Icon }) => (
   </div>
 );
 
-export default StatsCard; 
+export default StatsCard;

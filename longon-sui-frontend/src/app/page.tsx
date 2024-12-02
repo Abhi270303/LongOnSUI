@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useRouter } from "next/navigation"; // Changed from next/router
 import { DollarSign, ArrowRightLeft } from "lucide-react";
 import Navigation from "@/components/shared/Navbar";
